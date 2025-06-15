@@ -5,90 +5,55 @@
 #include "task.h"
 #include "counter.h"
 
-void* task_function(void* arg) {
-    Task* task = (Task*)arg;
-    
-    while (task->is_running) {
-        pthread_mutex_lock(&task->mutex);
-        
-        // Wait for scheduler signal and check if it's time for next arrival
-        uint64_t current_time = get_current_time_ms();
-        while (current_time < task->next_arrival) {
-            struct timespec ts;
-            ts.tv_sec = task->next_arrival / 1000;
-            ts.tv_nsec = (task->next_arrival % 1000) * 1000000;
-            pthread_cond_timedwait(&task->cond, &task->mutex, &ts);
-            current_time = get_current_time_ms();
-        }
-        
-        // Execute task
-        counter_increment(task->counter);
-        printf("%s: Counter value: %u (Time: %lu ms)\n", 
-               task->name, counter_get_value(task->counter), 
-               current_time);
-        
-        // Calculate next arrival time
-        task->next_arrival += task->period_ms;
-        pthread_mutex_unlock(&task->mutex);
-    }
-    
-    return NULL;
+// Task function definitions
+void task1_function(Task* task) {
+    counter_increment(task->counter);
+    printf("%s: Counter value: %u at time %lu ms\n", 
+           task->name, 
+           counter_get_value(task->counter),
+           get_current_time_ms());
 }
 
-void* scheduler_function(void* arg) {
-    Scheduler* scheduler = (Scheduler*)arg;
-    
-    while (scheduler->is_running) {
-        uint64_t current_time = get_current_time_ms();
-        
-        // Check and signal tasks that are due
-        for (int i = 0; i < 2; i++) {
-            Task* current_task = scheduler->tasks[i];
-            pthread_mutex_lock(&current_task->mutex);
-            
-            if (current_time >= current_task->next_arrival) {
-                pthread_cond_signal(&current_task->cond);
-            }
-            
-            pthread_mutex_unlock(&current_task->mutex);
-        }
-        
-        // Short sleep to prevent busy waiting
-        usleep(1000); // 1ms sleep
-    }
-    
-    return NULL;
+void task2_function(Task* task) {
+    counter_increment(task->counter);
+    printf("%s: Counter value: %u at time %lu ms\n", 
+           task->name, 
+           counter_get_value(task->counter),
+           get_current_time_ms());
 }
 
 int main() {
     Counter counter;
     counter_init(&counter);
     
+    // Create tasks
     Task task1, task2;
-    task_init(&task1, &counter, 1000, "Thread1"); // 1 second period
-    task_init(&task2, &counter, 2000, "Thread2"); // 2 second period
+    task_init(&task1, &counter, task1_function, 1000, 1000, "Thread1");
+    task_init(&task2, &counter, task2_function, 2000, 2000, "Thread2");
     
+    // Initialize and setup scheduler
     Scheduler scheduler;
-    scheduler_init(&scheduler, &task1, &task2);
+    scheduler_init(&scheduler);
+    scheduler_add_task(&scheduler, &task1);
+    scheduler_add_task(&scheduler, &task2);
     
+    // Start scheduling
+    printf("Starting scheduler...\n");
     scheduler_start(&scheduler);
-    task_start(&task1);
-    task_start(&task2);
     
     // Let it run for 10 seconds
     sleep(10);
     
-    // Change periods
+    // Change task periods
     printf("Changing periods...\n");
-    task_set_period(&task1, 500);  // 0.5 second
-    task_set_period(&task2, 1500); // 1.5 seconds
+    task_update_period(&task1, 500);
+    task_update_period(&task2, 1500);
     
     // Run for another 10 seconds
     sleep(10);
     
+    // Stop scheduling
     scheduler_stop(&scheduler);
-    task_stop(&task1);
-    task_stop(&task2);
     
     return 0;
 }

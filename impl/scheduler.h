@@ -2,15 +2,19 @@
 #define SCHEDULER_H
 
 #include "task.h"
+#include <stdbool.h>
+
+#define MAX_TASKS 2
 
 typedef struct {
-    Task* tasks[2];
-    pthread_t scheduler_thread;
+    Task* tasks[MAX_TASKS];
+    int num_tasks;
     bool is_running;
+    uint32_t hyperperiod_ms;
 } Scheduler;
 
-void* scheduler_function(void* arg);  // Add function declaration
-void scheduler_init(Scheduler* scheduler, Task* task1, Task* task2);
+void scheduler_init(Scheduler* scheduler);
+void scheduler_add_task(Scheduler* scheduler, Task* task);
 void scheduler_start(Scheduler* scheduler);
 void scheduler_stop(Scheduler* scheduler);
 
